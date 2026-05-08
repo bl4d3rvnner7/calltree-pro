@@ -1,0 +1,47 @@
+{
+  "name": "calltree-pro",
+  "version": "2.1.0",
+  "description": "Advanced static call-tree analyzer for JS/TS — one command, all reports + interactive disassembler-style HTML view with forward/back navigation, IDA-style explorer, and source-line annotations on unresolved fillers. Built for reverse-engineering obfuscated code.",
+  "main": "src/index.js",
+  "bin": {
+    "calltree": "src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/cli.js",
+    "test": "node test/run.js",
+    "example": "node src/cli.js examples/sample.js",
+    "example:tree": "node src/cli.js examples/sample.js --format tree",
+    "example:html": "node src/cli.js examples/sample.js --format html -o sample.html",
+    "example:report": "node src/cli.js examples/sample.js --format report -o sample-report.md"
+  },
+  "keywords": [
+    "babel",
+    "ast",
+    "call-graph",
+    "call-tree",
+    "static-analysis",
+    "javascript",
+    "typescript",
+    "reverse-engineering",
+    "malware-analysis",
+    "obfuscation",
+    "security",
+    "ida",
+    "disassembler"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=14"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.29.3",
+    "@babel/traverse": "^7.29.0",
+    "commander": "^12.1.0",
+    "fast-glob": "^3.3.2",
+    "picocolors": "^1.1.1"
+  },
+  "optionalDependencies": {
+    "@mermaid-js/mermaid-cli": "^11.4.2"
+  }
+}

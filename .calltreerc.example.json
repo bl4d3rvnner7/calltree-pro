@@ -1,0 +1,16 @@
+{
+  "ignore": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/__tests__/**",
+    "**/*.test.js",
+    "**/*.spec.js"
+  ],
+  "includeBuiltins": true,
+  "includeAnonymous": true,
+  "detectCycles": true,
+  "detectDead": true,
+  "hotspots": 15,
+  "showLocations": false
+}
