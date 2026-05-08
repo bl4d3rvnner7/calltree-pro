@@ -1,16 +1,53 @@
 # calltree-pro
 
-> Static call-graph analyzer for JavaScript/TypeScript — built for reverse-engineering obfuscated code.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D14-brightgreen)](https://nodejs.org/)
+[![Made with Babel](https://img.shields.io/badge/parser-%40babel%2Fparser-fcc72c)](https://babeljs.io/)
 
-`calltree-pro` parses your source with Babel, builds a full call graph, classifies suspicious API touchpoints (network, DNS, child-process, crypto, dynamic exec, …), and emits **six different reports in one shot** — including an interactive disassembler-style HTML view.
+> Reverse-engineer obfuscated JavaScript with one command. Interactive HTML disassembler view (IDA-style), severity-tagged sinks, auto-detected entry points, source-line annotations on unresolved calls.
+
+`calltree-pro` parses your source with Babel, builds a full call graph, classifies suspicious API touchpoints (network, DNS, child-process, crypto, dynamic exec, …), and emits a complete report bundle — including an interactive single-file HTML view designed for analysts working with `obfuscator.io` output and minified malware samples.
+
+![preview](./preview.png)
+
+## Quick start
+
+```bash
+git clone https://github.com/YOUR_USERNAME/calltree-pro.git
+cd calltree-pro
+npm install
+node src/cli.js examples/sample.js
+```
+
+That generates a `sample_report/` directory with every report at once. Open `sample_report/html.html` in any browser.
+
+To analyze your own file:
+
+```bash
+node src/cli.js path/to/suspicious.js
+```
+
+## What it produces
+
+One command writes everything into `<filename>_report/`:
+
+| File | What it is |
+|---|---|
+| `html.html` | **Interactive disassembler view.** Searchable sidebar, IDA-style explorer, forward/back navigation, breadcrumb, severity-colored sinks. Open this first. |
+| `report.md` | Full markdown audit. Box-drawing call trees, sinks tables, danger paths, function metrics, unresolved callees with line numbers. |
+| `tree.txt` | Plain-text call tree (no ANSI codes, diff-friendly). |
+| `json.json` | Machine-readable structured dump. |
+| `graph.dot` | Graphviz DOT — top-down, capped at 200 nodes, anchored on the auto-detected primary entry. |
+| `graph.<entry>.dot` | Focused 80-node, 3-hop neighborhood around the primary entry. |
+| `graph.svg` | Auto-rendered DOT → SVG (if `dot` from graphviz is on PATH). |
+| `graph.mermaid.md` | Mermaid flowchart for GitHub markdown. |
+| `graph.mmd` | Raw Mermaid source, ready for `mmdc -i graph.mmd -o graph.svg`. |
+| `graph.mermaid.svg` | Auto-rendered Mermaid → SVG (if `mmdc` is on PATH). |
+| `INDEX.md` | Auto-generated index linking everything. |
+
+The same colored tree streams to your terminal as it runs. After completion the CLI prints install hints for `graphviz` and `@mermaid-js/mermaid-cli` if either is missing.
 
 ```
-┌─────────────────────────────────────────
-│ ROOT FUNCTIONS
-└─────────────────────────────────────────
-
-  OQh [async]
-
 ┌─────────────────────────────────────────
 │ CALL TREES
 └─────────────────────────────────────────
@@ -40,81 +77,32 @@ You drop a 6,000-line minified blob from `obfuscator.io` (or a suspicious npm pa
 - What the symbol-mangled functions (`OQh`, `cEf.tryCreate`, `_0x11fbfb`) are connected to
 - Hotspots — which functions get called the most (often utilities the obfuscator references everywhere)
 - Cycles, dead code, async/generator/private flags, complexity, LOC, fan-in / fan-out
-- All callees that have **no definition** in your source — registered as `[unresolved]` *filler* stubs so the call tree stays connected even when names come from string-array indirection
+- Every callee that has **no definition** in your source — registered as `[unresolved]` *filler* stubs with the call-site line number, so the tree stays connected even when names come from string-array indirection
 
-## Install
+## How it differs from existing tools
 
-```bash
-npm install
-```
+[`madge`](https://github.com/pahen/madge) and [`dependency-cruiser`](https://github.com/sverweij/dependency-cruiser) operate at the **module level** — they show which files import which. They're great for codebase architecture but useless on a single-file obfuscated bundle where everything lives in one `.js`.
 
-Requires Node ≥ 14.
+`calltree-pro` operates at the **function level** inside a file. It traces who calls whom across class methods, prototypes, IIFEs, and arrow functions. The malware-analysis features (sink classification, danger paths, fillers for unresolved names) are designed for the case where you have one suspicious file and want to know what it actually does.
 
-## One command, all reports
+## The HTML view
 
-```bash
-node src/cli.js examples/newest.js
-```
-
-That's it. The tool generates a `newest_report/` directory (named after the input file) with all reports:
-
-| File | What it is |
-|---|---|
-| `html.html` | **Interactive disassembler view.** Open this first. Searchable sidebar, IDA-style explorer, forward/back navigation, breadcrumb, severity-colored sinks. |
-| `report.md` | Full markdown audit. Box-drawing call trees, sinks tables, danger paths, function metrics, unresolved callees with line numbers. |
-| `tree.txt` | Plain-text call tree (no ANSI codes, diff-friendly). |
-| `json.json` | Machine-readable structured dump. |
-| `graph.dot` | Graphviz DOT — top-down, capped at 200 nodes, anchored on the auto-detected primary entry. |
-| `graph.<entry>.dot` | Focused 80-node, 3-hop neighborhood around the primary entry — readable instead of a 20K-pixel mega-graph. |
-| `graph.svg` | Auto-rendered DOT → SVG (only present if `dot` from graphviz is on PATH). |
-| `graph.mermaid.md` | Mermaid flowchart for GitHub markdown. |
-| `graph.mmd` | Raw Mermaid source, ready for `mmdc -i graph.mmd -o graph.svg`. |
-| `graph.mermaid.svg` | Auto-rendered Mermaid → SVG (only present if `mmdc` from `@mermaid-js/mermaid-cli` is on PATH). |
-| `INDEX.md` | Auto-generated index linking everything together. |
-
-The same colored tree streams to your terminal as it runs. After completion, the CLI prints install hints for `graphviz` and `@mermaid-js/mermaid-cli` if either is missing.
-
-## Primary entry detection
-
-Obfuscated bundles often have 60+ "anonymous" roots and a handful of real ones. The tool auto-identifies the **primary entry** by picking the non-anonymous, non-toplevel root with the largest reachable subgraph — usually the orchestrator (e.g. `OQh` in the user's malware sample). It's marked with a `★` in the HTML sidebar, gets an `★ entry` badge in the function header, anchors the focused dot/mermaid graphs, and is auto-selected on page load.
-
-## Defaults
-
-The "all in one shot" run uses analyst-friendly defaults — everything on, no filters:
-
-| Default | Why |
-|---|---|
-| `--include-builtins` ON  | You want to see calls to `fetch`, `execSync`, `Buffer.from`, etc. — those are the dangerous ones |
-| `--include-anonymous` ON | Obfuscated code is full of anonymous fns — hiding them hides the graph |
-| `--detect-cycles` ON     | Free, useful |
-| `--detect-dead` ON       | Helps spot leftover scaffolding |
-| `--hotspots 15`          | Top 15 most-called functions |
-| `--color` ON             | Terminal output is colored by sink category |
-| no `-r` / `-d` / `-i`    | Full enumeration; no root filter, no depth cap, no ignore globs beyond `node_modules` |
-
-Override any of them with `--no-builtins`, `--no-color`, `-r OQh`, `-d 5`, `-i '**/test/**'`, etc.
-
-## The disassembler HTML view
-
-![preview](./preview.png)
+![explorer view](./preview-explorer.png)
 
 Single-file, no external deps (just Google Fonts CDN). Drop the `html.html` anywhere and double-click.
 
-- **Navbar (top):** `◄ back`, `forward ►`, `▣ entry` buttons + breadcrumb. Click any function in any tree to drill in; click back to return. `Alt+←` / `Alt+→` are shortcuts. `H` jumps to the primary entry. `/` focuses the search.
-- **Left sidebar:** every function in the project, with a category-colored dot. The primary entry is starred (`★`). Type to filter (substring or `/regex/`). Click a category chip to toggle.
+- **Navbar:** `◄ back`, `forward ►`, `▣ entry` buttons + breadcrumb. `Alt+←` / `Alt+→` shortcuts. `H` jumps to the primary entry. `/` focuses search.
+- **Left sidebar:** every function with a category-colored dot. The primary entry is starred (`★`). Type to filter (substring or `/regex/`). Click category chips to toggle.
 - **Center tabs:**
-  - **Call tree** — clickable forward tree (who *this* calls), with box-drawing connectors, async/ctor/unresolved badges, sink-category coloring, and **line numbers** next to each function (e.g. `dns.resolve4 [unresolved] L2570` shows the call site for unresolved fillers).
-  - **Callers (reverse)** — same UI, but who *calls this*.
-  - **Explorer** — IDA-style 3-column xrefs view: callers │ selected │ callees. Each card shows the call-site line (`@ L1340,L1350`). Dangerous categories get a red left border.
+  - **Call tree** — clickable forward tree with box-drawing, async/ctor/unresolved badges, sink-category coloring, and source-line annotations (e.g. `dns.resolve4 [unresolved] L2570`).
+  - **Callers (reverse)** — same UI for who calls this.
+  - **Explorer** — IDA-style 3-column xrefs view: callers │ selected │ callees, each card showing its call-site line.
   - **Overview / Cycles / Dead** — project-wide views.
-- **Right panel:**
-  - Hotspots with bar chart
-  - **Sinks reached from the current selection** — for each dangerous category (`dynamic_exec`, `child_process`, `network`, `dns`), the shortest call chain from your selection to a sink, as clickable pills
-  - All sinks grouped by category
+- **Right panel:** hotspots with bar chart; **sinks reached from the current selection** (shortest BFS path to each dangerous category, as clickable pills); all sinks grouped by category.
 
-## Source line numbers everywhere
+## Source line numbers
 
-Every node in every tree shows its line in the source. For **defined** functions that's where the body starts; for **unresolved fillers** (the obfuscator.io case where the parser only sees the call) the line is the call-site, captured from the edge — so `dns.resolve4 L2570` tells you exactly where in `newest.js` to look. The function header also lists up to 4 call sites for fillers (`called from: newest.js:2570:8; newest.js:2890:12; ...`).
+Every node in every tree shows its line in the source. For **defined** functions that's where the body starts; for **unresolved fillers** (the obfuscator.io case where the parser only sees the call) the line is the call-site, captured from the edge — so `dns.resolve4 L2570` tells you exactly where in the source to look. The function header lists up to 4 call sites for fillers (`called from: file.js:2570:8; file.js:2890:12; ...`).
 
 ## Sinks and categories
 
@@ -133,16 +121,14 @@ Every callee is classified into a category:
 | `fingerprint` | `navigator.*` |
 | `dom` / `scheduling` / `error` / `control` | (lower-priority categories) |
 
-Every category has a color, an icon, and a severity (`high`/`medium`/`low`). The HTML view colors function names by category; the markdown report tags every entry with its category.
-
-Add or override rules by editing `src/utils/sinks.js`.
+Each category has a color, an icon, and a severity (`high` / `medium` / `low`). The HTML colors function names by category; the markdown report tags every entry. Add or override rules by editing `src/utils/sinks.js`.
 
 ## Filler functions (the obfuscator.io case)
 
-When a function gets called but has no definition in the source — extremely common with `obfuscator.io` output, where names come from a runtime string-array lookup the parser can't follow — `calltree-pro` automatically registers a **filler** stub:
+When a function gets called but has no definition — extremely common with `obfuscator.io` output, where names come from a runtime string-array lookup the parser can't follow — the tool registers a **filler** stub:
 
 ```text
-└── dns.resolve4  [unresolved,dns]
+└── dns.resolve4  [unresolved,dns]  L2570
 ```
 
 Filler stubs:
@@ -150,33 +136,51 @@ Filler stubs:
 - Show up in the call tree, sidebar, and sinks tables
 - Get classified by the same regex rules (so `fetch`, `execSync`, etc. are still caught)
 - Are tagged `unresolved` everywhere they appear
-- Have a `[?]` marker in the HTML sidebar
-- Get a dedicated **"Unresolved callees"** table in the markdown report, sorted by caller count
+- Carry the **line number** of every call site that referenced them
+- Get a `[?]` marker in the HTML sidebar
+- Get a dedicated **"Unresolved callees"** table in `report.md`, sorted by caller count
 
-The point: your call graph never has dangling edges, even on heavily obfuscated code where most names are missing.
+Your call graph never has dangling edges, even on heavily obfuscated code.
 
 ## Graph rendering (DOT and Mermaid)
 
 A naïve dump of every node and edge produces a 20K-pixel SVG that's unreadable. The tool fights this two ways:
 
-1. **Anchor on the primary entry.** All graph output is BFS-bounded around the auto-detected entry function. Default cap is 200 nodes for `graph.dot`, 80 nodes for the focused `graph.<entry>.dot`, 120 for mermaid. Pass `--focus <name>` to anchor on something else, or `--no-builtins` etc. to filter.
-2. **Auto-render.** If `dot` (graphviz) and/or `mmdc` (`@mermaid-js/mermaid-cli`) are on PATH, the tool runs them and produces `graph.svg` and `graph.mermaid.svg` directly. If they're missing, it prints install hints:
-    ```bash
-    apt install graphviz             # debian / kali / ubuntu
-    brew install graphviz            # macOS
-    npm i -g @mermaid-js/mermaid-cli # mermaid renderer
-    ```
+1. **Anchor on the primary entry.** All graph output is BFS-bounded around the auto-detected entry function. Default cap is 200 nodes for `graph.dot`, 80 for the focused `graph.<entry>.dot`, 120 for mermaid. Pass `--focus <name>` to anchor on something else.
+2. **Auto-render.** If `dot` (graphviz) and/or `mmdc` (`@mermaid-js/mermaid-cli`) are on PATH, the tool runs them and produces `graph.svg` and `graph.mermaid.svg` directly:
 
-The DOT output is top-down (`rankdir="TB"`), with the primary entry highlighted in phosphor green (`penwidth=3`), unresolved fillers as dashed boxes, and edges into dangerous sinks colored by category (red for `child_process`/`dynamic_exec`, magenta for `network`/`dns`).
+   ```bash
+   apt install graphviz             # debian / kali / ubuntu
+   brew install graphviz            # macOS
+   npm i -g @mermaid-js/mermaid-cli # mermaid renderer
+   ```
+
+The DOT output is top-down, with the primary entry highlighted in phosphor green (`penwidth=3`), unresolved fillers as dashed boxes, and edges into dangerous sinks colored by category (red for `child_process`/`dynamic_exec`, magenta for `network`/`dns`).
+
+## Defaults
+
+The "all in one shot" run uses analyst-friendly defaults — everything on, no filters:
+
+| Default | Why |
+|---|---|
+| `--include-builtins` ON  | You want to see calls to `fetch`, `execSync`, `Buffer.from` — those are the dangerous ones |
+| `--include-anonymous` ON | Obfuscated code is full of anonymous functions — hiding them hides the graph |
+| `--detect-cycles` ON     | Free, useful |
+| `--detect-dead` ON       | Helps spot leftover scaffolding |
+| `--hotspots 15`          | Top 15 most-called functions |
+| `--color` ON             | Terminal output is colored by sink category |
+| no `-r` / `-d` / `-i`    | Full enumeration; no root filter, no depth cap, no ignore globs beyond `node_modules` |
+
+Override any with `--no-builtins`, `--no-color`, `-r OQh`, `-d 5`, `-i '**/test/**'`, etc.
 
 ## Single-format mode
 
 Want only one report? Use `--format`:
 
 ```bash
-node src/cli.js examples/newest.js --format dot -o graph.dot
-node src/cli.js examples/newest.js --format html -o report.html
-node src/cli.js examples/newest.js --format report -o audit.md
+node src/cli.js suspicious.js --format html   -o report.html
+node src/cli.js suspicious.js --format report -o audit.md
+node src/cli.js suspicious.js --format dot    -o graph.dot
 ```
 
 When `--format` is given the output dir is *not* created — only the requested file is emitted.
@@ -219,6 +223,7 @@ console.log(result.graph.byCategory().child_process);
 | Method | Returns |
 |---|---|
 | `roots()` | Functions with no callers (entry points) |
+| `primaryEntry()` | The most "important" entry point (largest reachable subgraph) |
 | `cycles()` | Tarjan SCC cycle detection |
 | `deadFunctions()` | Defined but never called |
 | `hotspots(n)` | Top-N most-called functions with counts |
@@ -238,7 +243,7 @@ src/
     graph.js             # CallGraph + cycles, dead, hotspots, fillers, sinks
   formatters/
     tree.js              # Box-drawing terminal output
-    report.js            # Markdown report (this is what you commit)
+    report.js            # Markdown report
     html.js              # Single-file interactive disassembler HTML
     json.js / dot.js / mermaid.js
   utils/
@@ -249,6 +254,10 @@ examples/
 test/
 ```
 
+## Contributing
+
+Issues and PRs welcome. Please run `npm test` before submitting.
+
 ## License
 
-MIT.
+[MIT](./LICENSE)
