@@ -12,7 +12,6 @@
 ![GitHub Forks](https://img.shields.io/github/forks/bl4d3rvnner7/calltree-pro?style=for-the-badge)
 ![GitHub Issues](https://img.shields.io/github/issues/bl4d3rvnner7/calltree-pro?style=for-the-badge)
 ![GitHub Last Commit](https://img.shields.io/github/last-commit/bl4d3rvnner7/calltree-pro?style=for-the-badge)
-![GitHub Repo Size](https://img.shields.io/github/repo-size/bl4d3rvnner7/calltree-pro?style=for-the-badge)
 ![Built with Claude](https://img.shields.io/badge/Built%20with-Claude-DAA520?style=for-the-badge&labelColor=FFFFFF&color=DAA520)
 
 ---
